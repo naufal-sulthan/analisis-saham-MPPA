@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisa Saham MPPA - Dashboard Interaktif</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <!-- Chosen Palette: Warm Corporate Neutral. Background: Slate-50/White. Primary: Slate-800. Accents: Blue-600 (Trust), Red-500 (Risk/Loss), Green-500 (Growth). -->
+    
+    <!-- Application Structure Plan:
+        1. Header & Navigation: Fixed navigation for quick access to 5 key modules.
+        2. Executive Summary (Dashboard): Immediate "Health Check" with key metrics and a sentiment gauge.
+        3. Deep Dive Financials: Interactive charts (Revenue vs Net Income, Margin Trends) to analyze the turnaround story.
+        4. Technical Analysis: Plotly candlestick chart for price action interaction (Zoom/Pan).
+        5. Strategy & Outlook: Visualizing the O2O (Online-to-Offline) strategy and store format mix.
+        6. SWOT & Valuation: Interactive grid for qualitative analysis and a valuation calculator.
+        Rationale: Investors need to see the "Big Picture" first, then verify with "Numbers", check "Timing" (Technical), and understand the "Future" (Strategy).
+    -->
+
+    <!-- Visualization & Content Choices:
+        1. Sentiment Gauge (Canvas): Goal: Quick status. Method: Custom Canvas drawing. Interaction: None. Justification: Instant visual cue of analyst sentiment.
+        2. Financial Combo Chart (Chart.js): Goal: Show correlation between revenue strategies and bottom-line impact. Method: Bar (Rev) + Line (Net Income). Interaction: Tooltips.
+        3. Stock Price Chart (Plotly): Goal: Analyze price volatility. Method: Candlestick. Interaction: Zoom, Pan, Range Slider. Justification: Plotly excels at financial time-series.
+        4. O2O Composition (Chart.js Doughnut): Goal: Highlight the digital growth story. Method: Doughnut. Interaction: Hover for details.
+        5. SWOT Grid (HTML/JS): Goal: Organize qualitative factors. Method: Interactive 2x2 Grid. Interaction: Click to expand details. Justification: Clean UI for dense text.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        /* Custom Chart Container Styling as per Requirements */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px; /* Max width constraint */
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px; /* Base height */
+            max-height: 450px;
+        }
+
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .nav-active {
+            background-color: #1e293b; /* Slate 800 */
+            color: white;
+            font-weight: 600;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans leading-relaxed selection:bg-blue-100">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-2">
+                    <div class="bg-red-600 text-white font-bold p-1 rounded">MPPA</div>
+                    <span class="font-bold text-xl tracking-tight text-slate-900">Analisa Investasi</span>
+                </div>
+                <!-- Desktop Nav -->
+                <div class="hidden md:flex space-x-1">
+                    <button onclick="switchTab('summary')" id="nav-summary" class="nav-btn px-4 py-2 rounded-lg text-sm transition-colors nav-active">Ringkasan</button>
+                    <button onclick="switchTab('financials')" id="nav-financials" class="nav-btn px-4 py-2 rounded-lg text-sm hover:bg-slate-100 transition-colors">Keuangan</button>
+                    <button onclick="switchTab('technical')" id="nav-technical" class="nav-btn px-4 py-2 rounded-lg text-sm hover:bg-slate-100 transition-colors">Teknikal</button>
+                    <button onclick="switchTab('strategy')" id="nav-strategy" class="nav-btn px-4 py-2 rounded-lg text-sm hover:bg-slate-100 transition-colors">Strategi</button>
+                    <button onclick="switchTab('outlook')" id="nav-outlook" class="nav-btn px-4 py-2 rounded-lg text-sm hover:bg-slate-100 transition-colors">Prospek</button>
+                </div>
+                <!-- Mobile Menu Button (Hamburger substitute using Unicode) -->
+                <button onclick="toggleMobileMenu()" class="md:hidden text-2xl focus:outline-none">&#9776;</button>
+            </div>
+        </div>
+        <!-- Mobile Nav -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 p-4 space-y-2">
+            <button onclick="switchTab('summary')" class="mobile-nav-btn w-full text-left px-4 py-2 rounded hover:bg-slate-50 block">Ringkasan</button>
+            <button onclick="switchTab('financials')" class="mobile-nav-btn w-full text-left px-4 py-2 rounded hover:bg-slate-50 block">Keuangan</button>
+            <button onclick="switchTab('technical')" class="mobile-nav-btn w-full text-left px-4 py-2 rounded hover:bg-slate-50 block">Teknikal</button>
+            <button onclick="switchTab('strategy')" class="mobile-nav-btn w-full text-left px-4 py-2 rounded hover:bg-slate-50 block">Strategi</button>
+            <button onclick="switchTab('outlook')" class="mobile-nav-btn w-full text-left px-4 py-2 rounded hover:bg-slate-50 block">Prospek</button>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen">
+
+        <!-- SECTION 1: EXECUTIVE SUMMARY -->
+        <section id="summary" class="tab-content active">
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">PT Matahari Putra Prima Tbk (MPPA)</h1>
+                <p class="text-slate-500">Laporan Analisa & Prospek Saham &bull; Sektor: Retail (FMCG) &bull; Ticker: MPPA</p>
+            </div>
+
+            <p class="mb-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <strong>Pengantar Bagian Ini:</strong> Ringkasan Eksekutif memberikan pandangan cepat ("helicopter view") mengenai posisi MPPA saat ini. Dashboard ini menyoroti metrik harga terkini, perubahan fundamental utama, dan sentimen pasar secara keseluruhan. Gunakan bagian ini untuk memahami tesis investasi dasar sebelum menyelami data yang lebih dalam.
+            </p>
+
+            <!-- Key Metrics Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Card 1 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 card-hover">
+                    <div class="text-sm text-slate-500 mb-1">Harga Terkini (IDR)</div>
+                    <div class="flex items-end gap-2">
+                        <span class="text-4xl font-bold text-slate-800">58</span>
+                        <span class="text-sm font-medium text-red-500 mb-2">&#9660; -1.6%</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-2">Volatilitas Tinggi</div>
+                </div>
+                <!-- Card 2 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 card-hover">
+                    <div class="text-sm text-slate-500 mb-1">Kapitalisasi Pasar</div>
+                    <div class="text-2xl font-bold text-slate-800">~700 M</div>
+                    <div class="text-xs text-slate-400 mt-2">Small Cap</div>
+                </div>
+                <!-- Card 3 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 card-hover">
+                    <div class="text-sm text-slate-500 mb-1">Pertumbuhan Penjualan Online</div>
+                    <div class="text-2xl font-bold text-green-600">+12.5%</div>
+                    <div class="text-xs text-slate-400 mt-2">Kontribusi O2O Meningkat</div>
+                </div>
+                <!-- Card 4 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 card-hover">
+                    <div class="text-sm text-slate-500 mb-1">Status Keuangan</div>
+                    <div class="text-2xl font-bold text-yellow-600">Turnaround</div>
+                    <div class="text-xs text-slate-400 mt-2">Fokus Efisiensi Biaya</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Thesis Text -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold mb-4 border-b border-slate-100 pb-2">Tesis Investasi: High Risk, Turnaround Play</h2>
+                    <p class="text-slate-600 mb-4 text-justify">
+                        MPPA (Hypermart) sedang berada dalam fase krusial transformasi bisnis. Setelah tertekan oleh perubahan pola belanja konsumen pasca-pandemi dan persaingan ketat minimarket (Alfamart/Indomaret), MPPA kini memfokuskan strategi pada <strong>Omnichannel (O2O)</strong> dan efisiensi gerai.
+                    </p>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-3">
+                            <span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded mt-1">PRO</span>
+                            <span class="text-slate-600 text-sm">Integrasi digital yang kuat melalui aplikasi dan kerjasama marketplace (GrabMart, Tokopedia) menjadi pendorong pendapatan baru.</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded mt-1">KONTRA</span>
+                            <span class="text-slate-600 text-sm">Beban operasional masih tinggi dan profitabilitas bersih masih menjadi tantangan utama. Kompetisi harga sangat ketat.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Sentiment Gauge -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                    <h3 class="text-sm font-semibold text-slate-500 mb-4">Analyst Sentiment Meter</h3>
+                    <div class="relative w-48 h-24">
+                        <canvas id="sentimentCanvas" width="200" height="110"></canvas>
+                        <div class="absolute bottom-0 left-0 w-full text-center">
+                            <span id="sentimentText" class="text-xl font-bold text-yellow-600">HOLD</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-center text-slate-400 mt-4">Risk Profile: Aggressive</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: FINANCIAL PERFORMANCE -->
+        <section id="financials" class="tab-content">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-900">Kinerja Keuangan</h2>
+                <p class="text-slate-500">Analisis Pendapatan, Laba Bersih, dan Marjin Operasional</p>
+            </div>
+
+            <p class="mb-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <strong>Konteks Data:</strong> Bagian ini memvisualisasikan upaya MPPA dalam menstabilkan pendapatan (Revenue) sambil menekan kerugian (Net Income). Perhatikan grafik batang (Pendapatan) yang relatif stagnan, namun garis (Laba Bersih) yang perlahan bergerak naik mendekati titik impas (breakeven), menunjukkan efisiensi mulai bekerja.
+            </p>
+
+            <!-- Revenue vs Net Income Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                <h3 class="text-lg font-semibold mb-4">Tren Pendapatan vs Laba Bersih (Miliar IDR)</h3>
+                <div class="chart-container">
+                    <canvas id="financialChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Ratios Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-semibold mb-4">Komposisi Penjualan (O2O)</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="segmentChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-center text-sm text-slate-500">
+                        Penjualan Online kini menyumbang porsi double-digit yang signifikan.
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <h3 class="text-lg font-semibold mb-4">Rasio Kunci (Estimasi TTM)</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Metrik</th>
+                                    <th class="px-4 py-3 font-medium">Nilai</th>
+                                    <th class="px-4 py-3 font-medium">Interpretasi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">Gross Margin</td>
+                                    <td class="px-4 py-3">18.5%</td>
+                                    <td class="px-4 py-3 text-yellow-600">Stabil, perlu ditingkatkan</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">SSSG</td>
+                                    <td class="px-4 py-3 font-bold text-red-500">-1.2%</td>
+                                    <td class="px-4 py-3">Same Store Sales masih tertekan</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">DER (Debt to Equity)</td>
+                                    <td class="px-4 py-3">High</td>
+                                    <td class="px-4 py-3 text-red-600">Leverage tinggi (Perlu restrukturisasi)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">PBV</td>
+                                    <td class="px-4 py-3">~1.2x</td>
+                                    <td class="px-4 py-3 text-green-600">Valuasi relatif murah vs historis</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: TECHNICAL ANALYSIS -->
+        <section id="technical" class="tab-content">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-900">Analisa Teknikal & Pergerakan Harga</h2>
+                <p class="text-slate-500">Grafik Interaktif Candlestick</p>
+            </div>
+
+            <p class="mb-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <strong>Cara Menggunakan Grafik:</strong> Grafik di bawah ini menggunakan Plotly.js. Anda dapat melakukan <em>zoom in/out</em> dengan mouse, menggeser grafik (pan), dan melihat detail harga (Open, High, Low, Close) dengan mengarahkan kursor ke atas <em>candle</em>. Analisa ini membantu menentukan titik masuk (entry) dan keluar (exit) yang potensial.
+            </p>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
+                    <h3 class="text-lg font-semibold">Grafik Harga MPPA (Daily)</h3>
+                    <div class="flex gap-2">
+                        <button onclick="updateTechChart('1M')" class="px-3 py-1 text-xs border border-slate-300 rounded hover:bg-slate-100">1M</button>
+                        <button onclick="updateTechChart('3M')" class="px-3 py-1 text-xs border border-slate-300 rounded hover:bg-slate-100">3M</button>
+                        <button onclick="updateTechChart('6M')" class="px-3 py-1 text-xs bg-slate-800 text-white border border-slate-800 rounded">6M</button>
+                    </div>
+                </div>
+                
+                <div class="chart-container border border-slate-100 rounded">
+                    <!-- Plotly Container -->
+                    <div id="plotlyChart" class="w-full h-full"></div>
+                </div>
+
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 bg-slate-50 rounded border border-slate-200">
+                        <h4 class="font-bold text-sm mb-2 text-slate-700">Support & Resistance</h4>
+                        <ul class="text-sm space-y-1">
+                            <li class="flex justify-between"><span>Resistance 2 (R2)</span> <span class="font-mono">72</span></li>
+                            <li class="flex justify-between"><span>Resistance 1 (R1)</span> <span class="font-mono">64</span></li>
+                            <li class="flex justify-between font-bold text-blue-600"><span>Pivot Point</span> <span class="font-mono">58</span></li>
+                            <li class="flex justify-between"><span>Support 1 (S1)</span> <span class="font-mono">52</span></li>
+                            <li class="flex justify-between"><span>Support 2 (S2)</span> <span class="font-mono">50 (Psychological)</span></li>
+                        </ul>
+                    </div>
+                    <div class="p-4 bg-slate-50 rounded border border-slate-200">
+                        <h4 class="font-bold text-sm mb-2 text-slate-700">Indikator Teknis</h4>
+                        <ul class="text-sm space-y-1">
+                            <li class="flex justify-between"><span>RSI (14)</span> <span class="text-yellow-600">Neutral (45)</span></li>
+                            <li class="flex justify-between"><span>MACD</span> <span class="text-green-600">Golden Cross Potensial</span></li>
+                            <li class="flex justify-between"><span>Volume</span> <span class="text-red-500">Low (Sepi Peminat)</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: STRATEGY -->
+        <section id="strategy" class="tab-content">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-900">Strategi Transformasi</h2>
+                <p class="text-slate-500">Pilar Utama Pemulihan Bisnis</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Strategy Card 1 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-blue-500">
+                    <div class="text-3xl mb-3">&#128722;</div>
+                    <h3 class="font-bold text-lg mb-2">Omnichannel Expansion</h3>
+                    <p class="text-sm text-slate-600">Integrasi mendalam dengan GrabMart, Tokopedia, dan ShopeeFood. Memperluas jangkauan pengiriman Hypermart Express.</p>
+                </div>
+                <!-- Strategy Card 2 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-green-500">
+                    <div class="text-3xl mb-3">&#127978;</div>
+                    <h3 class="font-bold text-lg mb-2">Format Re-sizing</h3>
+                    <p class="text-sm text-slate-600">Mengurangi luas gerai Hypermart yang tidak produktif dan memperbanyak format <strong>Hyfresh</strong> & <strong>Foodmart</strong> yang lebih <em>compact</em>.</p>
+                </div>
+                <!-- Strategy Card 3 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border-t-4 border-orange-500">
+                    <div class="text-3xl mb-3">&#9878;</div>
+                    <h3 class="font-bold text-lg mb-2">Efisiensi Rantai Pasok</h3>
+                    <p class="text-sm text-slate-600">Sentralisasi logistik untuk produk segar (Fresh Products) guna mengurangi <em>waste</em> dan meningkatkan margin.</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-lg font-semibold mb-6">Peta Jalan Ekosistem Digital</h3>
+                <!-- CSS-based Flowchart -->
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 relative">
+                    <!-- Step 1 -->
+                    <div class="flex-1 w-full text-center p-4 border border-slate-200 rounded-lg bg-slate-50 relative z-10">
+                        <div class="font-bold text-blue-600 mb-1">Customer</div>
+                        <div class="text-xs">Order via App/Web</div>
+                    </div>
+                    <!-- Connector -->
+                    <div class="hidden md:block w-8 h-1 bg-slate-300"></div>
+                    <div class="md:hidden h-8 w-1 bg-slate-300"></div>
+                    
+                    <!-- Step 2 -->
+                    <div class="flex-1 w-full text-center p-4 border border-slate-200 rounded-lg bg-white shadow-md relative z-10">
+                        <div class="font-bold text-slate-800 mb-1">O2O Hub</div>
+                        <div class="text-xs">Hypermart Online / Grab / Tokped</div>
+                        <div class="mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded inline-block">Growth Engine</div>
+                    </div>
+
+                    <!-- Connector -->
+                    <div class="hidden md:block w-8 h-1 bg-slate-300"></div>
+                    <div class="md:hidden h-8 w-1 bg-slate-300"></div>
+
+                    <!-- Step 3 -->
+                    <div class="flex-1 w-full text-center p-4 border border-slate-200 rounded-lg bg-slate-50 relative z-10">
+                        <div class="font-bold text-blue-600 mb-1">Fulfillment</div>
+                        <div class="text-xs">Pick & Pack di Gerai Terdekat</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: OUTLOOK & SWOT -->
+        <section id="outlook" class="tab-content">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-slate-900">Prospek & Rekomendasi</h2>
+                <p class="text-slate-500">Analisis SWOT & Kesimpulan Akhir</p>
+            </div>
+
+            <p class="mb-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <strong>Panduan Interaktif:</strong> Klik pada setiap kuadran SWOT di bawah ini untuk melihat detail analisis kualitatif mengenai posisi strategis MPPA.
+            </p>
+
+            <!-- Interactive SWOT Matrix -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <!-- Strengths -->
+                <div onclick="toggleSwot('strength')" class="bg-green-50 p-6 rounded-xl border border-green-200 cursor-pointer hover:bg-green-100 transition-colors relative group h-48 overflow-y-auto">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-green-800 text-lg">STRENGTHS (Kekuatan)</h3>
+                        <span class="text-green-800 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-green-200 px-2 py-1 rounded">Klik detail</span>
+                    </div>
+                    <ul id="swot-strength" class="mt-4 space-y-2 text-sm text-green-900 list-disc list-inside">
+                        <li>Brand Hypermart yang kuat dan dikenal luas.</li>
+                        <li>Jaringan distribusi nasional yang luas.</li>
+                        <li>Dukungan kuat dari ekosistem digital Lippo Group.</li>
+                    </ul>
+                </div>
+
+                <!-- Weaknesses -->
+                <div onclick="toggleSwot('weakness')" class="bg-red-50 p-6 rounded-xl border border-red-200 cursor-pointer hover:bg-red-100 transition-colors relative group h-48 overflow-y-auto">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-red-800 text-lg">WEAKNESSES (Kelemahan)</h3>
+                         <span class="text-red-800 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-red-200 px-2 py-1 rounded">Klik detail</span>
+                    </div>
+                    <ul id="swot-weakness" class="mt-4 space-y-2 text-sm text-red-900 list-disc list-inside">
+                        <li>Beban operasional gerai fisik yang besar.</li>
+                        <li>Likuiditas saham relatif rendah (sering tidak likuid).</li>
+                        <li>Profitabilitas historis yang belum konsisten positif.</li>
+                    </ul>
+                </div>
+
+                <!-- Opportunities -->
+                <div onclick="toggleSwot('opportunity')" class="bg-blue-50 p-6 rounded-xl border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors relative group h-48 overflow-y-auto">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-blue-800 text-lg">OPPORTUNITIES (Peluang)</h3>
+                         <span class="text-blue-800 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-blue-200 px-2 py-1 rounded">Klik detail</span>
+                    </div>
+                    <ul id="swot-opportunity" class="mt-4 space-y-2 text-sm text-blue-900 list-disc list-inside">
+                        <li>Pemulihan daya beli kelas menengah pasca inflasi.</li>
+                        <li>Pertumbuhan pasar e-grocery di kota tier-2 dan tier-3.</li>
+                        <li>Potensi aksi korporasi (Rights Issue/Strategic Partner).</li>
+                    </ul>
+                </div>
+
+                <!-- Threats -->
+                <div onclick="toggleSwot('threat')" class="bg-yellow-50 p-6 rounded-xl border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors relative group h-48 overflow-y-auto">
+                    <div class="flex justify-between items-start">
+                        <h3 class="font-bold text-yellow-800 text-lg">THREATS (Ancaman)</h3>
+                         <span class="text-yellow-800 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-yellow-200 px-2 py-1 rounded">Klik detail</span>
+                    </div>
+                    <ul id="swot-threat" class="mt-4 space-y-2 text-sm text-yellow-900 list-disc list-inside">
+                        <li>Persaingan dari Minimarket yang semakin "Hyper" (Fresh food).</li>
+                        <li>Kenaikan biaya energi dan logistik.</li>
+                        <li>Perubahan preferensi belanja ke toko kelontong modern.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Conclusion Box -->
+            <div class="bg-slate-800 text-white p-8 rounded-xl shadow-lg">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="flex-1">
+                        <h3 class="text-2xl font-bold mb-2">Kesimpulan: Speculative Buy / Hold</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed mb-4">
+                            MPPA menarik bagi investor dengan profil risiko tinggi (Aggressive) yang percaya pada cerita <em>turnaround</em>. Valuasi saat ini sudah mendiskon banyak berita buruk. Kunci keberhasilan ada pada kemampuan manajemen menekan rugi bersih di Kuartal mendatang.
+                        </p>
+                        <div class="flex gap-4 text-sm">
+                            <span class="px-3 py-1 bg-green-500 rounded text-white font-bold">Target Harga: 75</span>
+                            <span class="px-3 py-1 bg-red-500 rounded text-white font-bold">Stop Loss: 48</span>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-auto flex flex-col gap-2">
+                        <button class="w-full bg-white text-slate-900 px-6 py-3 rounded-lg font-bold hover:bg-slate-100 transition" onclick="alert('Fitur berlangganan laporan lengkap akan segera tersedia.')">Unduh Laporan PDF</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-400 text-sm mb-2">&copy; 2024 Analisa Saham Ritel Indonesia. Data disimulasikan untuk tujuan demonstrasi UI/UX.</p>
+            <p class="text-xs text-slate-300">Disclaimer: Bukan ajakan membeli atau menjual. Investasi saham mengandung risiko.</p>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- DATA STORE ---
+        const appData = {
+            currentTab: 'summary',
+            financials: {
+                years: ['2020', '2021', '2022', '2023', '2024 (Est)'],
+                revenue: [6.7, 6.5, 7.0, 6.8, 7.1], // Triliun IDR
+                netIncome: [-1.2, -0.9, -0.4, -0.2, -0.05] // Triliun IDR (Negative implies loss)
+            },
+            segments: {
+                labels: ['Offline (In-Store)', 'Online (O2O)', 'B2B'],
+                data: [82, 12, 6]
+            },
+            stockPrices: {
+                // Simulated data generation for Plotly
+                dates: [],
+                open: [],
+                high: [],
+                low: [],
+                close: []
+            }
+        };
+
+        // --- INIT FUNCTIONS ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSentimentGauge();
+            initFinancialChart();
+            initSegmentChart();
+            generateStockData();
+            initStockChart();
+        });
+
+        // --- NAVIGATION LOGIC ---
+        function switchTab(tabId) {
+            // Update State
+            appData.currentTab = tabId;
+
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+
+            // Update Buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('nav-active');
+                btn.classList.remove('text-white');
+            });
+            const activeBtn = document.getElementById(`nav-${tabId}`);
+            if(activeBtn) activeBtn.classList.add('nav-active');
+
+            // Mobile menu toggle logic
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (!mobileMenu.classList.contains('hidden')) {
+                toggleMobileMenu();
+            }
+
+            // Resize charts if tab contains them (fixes Chart.js rendering in hidden tabs)
+            if(tabId === 'financials') {
+                // Slight delay to ensure DOM is visible before resize calculation
+                setTimeout(() => {
+                    const chartInstance = Chart.getChart("financialChart");
+                    if (chartInstance) chartInstance.resize();
+                    const segChartInstance = Chart.getChart("segmentChart");
+                    if (segChartInstance) segChartInstance.resize();
+                }, 50);
+            }
+            if(tabId === 'technical') {
+                 setTimeout(() => {
+                    Plotly.Plots.resize('plotlyChart');
+                }, 50);
+            }
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // --- CHART: SENTIMENT GAUGE (CANVAS) ---
+        function renderSentimentGauge() {
+            const canvas = document.getElementById('sentimentCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height - 10;
+            const radius = 80;
+
+            // Draw Background Arc
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, Math.PI, 0);
+            ctx.lineWidth = 20;
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.stroke();
+
+            // Draw Color Zones
+            // Red (Sell)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, Math.PI, Math.PI + (Math.PI/3));
+            ctx.strokeStyle = '#ef4444'; // Red-500
+            ctx.stroke();
+            // Yellow (Hold)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, Math.PI + (Math.PI/3), Math.PI + (2*Math.PI/3));
+            ctx.strokeStyle = '#eab308'; // Yellow-500
+            ctx.stroke();
+            // Green (Buy)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, Math.PI + (2*Math.PI/3), 0);
+            ctx.strokeStyle = '#22c55e'; // Green-500
+            ctx.stroke();
+
+            // Draw Needle (Pointing to Hold - middle of yellow)
+            const angle = Math.PI * 1.5; // Upward
+            const needleLen = radius - 5;
+            const nx = centerX + needleLen * Math.cos(angle);
+            const ny = centerY + needleLen * Math.sin(angle);
+
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(nx, ny);
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#475569';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Pivot Circle
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#475569';
+            ctx.fill();
+        }
+
+        // --- CHART: FINANCIALS (CHART.JS) ---
+        function initFinancialChart() {
+            const ctx = document.getElementById('financialChart').getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: appData.financials.years,
+                    datasets: [
+                        {
+                            label: 'Pendapatan (Triliun IDR)',
+                            data: appData.financials.revenue,
+                            backgroundColor: 'rgba(59, 130, 246, 0.5)', // Blue
+                            borderColor: 'rgb(59, 130, 246)',
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Laba/Rugi Bersih (Triliun IDR)',
+                            data: appData.financials.netIncome,
+                            type: 'line',
+                            borderColor: 'rgb(239, 68, 68)', // Red
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Pendapatan' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Laba Bersih' }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y + ' T';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- CHART: SEGMENT (CHART.JS) ---
+        function initSegmentChart() {
+            const ctx = document.getElementById('segmentChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: appData.segments.labels,
+                    datasets: [{
+                        data: appData.segments.data,
+                        backgroundColor: [
+                            '#cbd5e1', // Slate 300 (Offline)
+                            '#22c55e', // Green 500 (Online - Highlight)
+                            '#64748b'  // Slate 500 (B2B)
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // --- CHART: TECHNICAL (PLOTLY) ---
+        function generateStockData() {
+            // Generate simulated candlestick data
+            let price = 60;
+            const now = new Date();
+            for (let i = 100; i >= 0; i--) {
+                const date = new Date(now);
+                date.setDate(date.getDate() - i);
+                
+                // Random walk
+                const change = (Math.random() - 0.5) * 2; 
+                const open = price;
+                const close = price + change;
+                const high = Math.max(open, close) + Math.random();
+                const low = Math.min(open, close) - Math.random();
+                
+                appData.stockPrices.dates.push(date.toISOString().split('T')[0]);
+                appData.stockPrices.open.push(open);
+                appData.stockPrices.high.push(high);
+                appData.stockPrices.low.push(low);
+                appData.stockPrices.close.push(close);
+                
+                price = close;
+            }
+        }
+
+        function initStockChart() {
+            const trace = {
+                x: appData.stockPrices.dates,
+                close: appData.stockPrices.close,
+                decreasing: {line: {color: '#ef4444'}},
+                high: appData.stockPrices.high,
+                increasing: {line: {color: '#22c55e'}},
+                line: {color: 'rgba(31,119,180,1)'},
+                low: appData.stockPrices.low,
+                open: appData.stockPrices.open,
+                type: 'candlestick',
+                xaxis: 'x',
+                yaxis: 'y'
+            };
+
+            const layout = {
+                dragmode: 'zoom',
+                margin: { r: 10, t: 25, b: 40, l: 60 },
+                showlegend: false,
+                xaxis: {
+                    autorange: true,
+                    title: 'Tanggal',
+                    type: 'date',
+                    rangeslider: { visible: false } // Custom buttons handle range
+                },
+                yaxis: {
+                    autorange: true,
+                    type: 'linear'
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)'
+            };
+            
+            // Render inside the chart container div
+            Plotly.newPlot('plotlyChart', [trace], layout, {responsive: true, displayModeBar: false});
+        }
+
+        function updateTechChart(range) {
+            const chartDiv = document.getElementById('plotlyChart');
+            let startIndex = 0;
+            const total = appData.stockPrices.dates.length;
+
+            if (range === '1M') startIndex = total - 30;
+            if (range === '3M') startIndex = total - 90;
+            if (range === '6M') startIndex = 0; // Use all generated data
+
+            if(startIndex < 0) startIndex = 0;
+
+            const update = {
+                'xaxis.range': [appData.stockPrices.dates[startIndex], appData.stockPrices.dates[total-1]]
+            };
+
+            Plotly.relayout(chartDiv, update);
+        }
+
+        // --- INTERACTIVITY: SWOT DETAILS ---
+        function toggleSwot(type) {
+            const list = document.getElementById(`swot-${type}`);
+            // Simple visual cue toggle (in a real app, could be modal or expansion)
+            // Here, we just highlight briefly
+            list.parentElement.classList.add('ring-2', 'ring-offset-2');
+            setTimeout(() => {
+                list.parentElement.classList.remove('ring-2', 'ring-offset-2');
+            }, 300);
+        }
+
+    </script>
+</body>
+</html>
